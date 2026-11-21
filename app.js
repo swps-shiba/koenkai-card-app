@@ -633,9 +633,10 @@ function orderCorners(pts) {
 async function detectCorners() {
   if (!cropState) return;
   const target = cropState;
+  const targetImg = target.img;
   const status = $("#cropStatus");
-  const { ok, pts } = await runDetection(target.img);
-  if (!cropState || cropState !== target) return;
+  const { ok, pts } = await runDetection(targetImg);
+  if (!cropState || cropState !== target || cropState.img !== targetImg) return;
   if (pts) {
     cropState.corners = pts;
     status.textContent = "四隅を検出しました。ずれているときは丸をドラッグして直してください。";
@@ -766,6 +767,30 @@ $("#cropRedetectBtn").addEventListener("click", () => {
   layoutCropOverlay();
   $("#cropStatus").textContent = "カードの四隅を検出しています…";
   detectCorners();
+});
+$("#cropRotateBtn").addEventListener("click", () => {
+  if (!cropState) return;
+  const img = cropState.img;
+  const canvas = document.createElement("canvas");
+  canvas.width = imgH(img);
+  canvas.height = imgW(img);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate(Math.PI / 2);
+  ctx.drawImage(img, -imgW(img) / 2, -imgH(img) / 2);
+  const rotated = new Image();
+  rotated.onload = () => {
+    if (!cropState) return;
+    cropState.img = rotated;
+    cropState.corners = defaultCorners(rotated);
+    $("#cropImg").src = rotated.src;
+    $("#cropStatus").textContent = "カードの四隅を検出しています…";
+    layoutCropOverlay();
+    detectCorners();
+  };
+  rotated.onerror = () => { $("#cropStatus").textContent = "回転できませんでした。"; };
+  rotated.src = canvas.toDataURL("image/jpeg", 0.92);
 });
 $("#cancelFormBtn").addEventListener("click", () => {
   if (editingId) { currentId = editingId; renderDetail(false); showView("detailView"); }
