@@ -225,6 +225,8 @@ function renderDetail(flipped) {
   if (!c) { renderList(); showView("listView"); return; }
   const idx = detailIndex();
   $("#detailCounter").textContent = idx >= 0 ? `${idx + 1} / ${viewList.length}` : "";
+  $("#prevCardBtn").disabled = idx <= 0;
+  $("#nextCardBtn").disabled = idx < 0 || idx >= viewList.length - 1;
   $("#flipInner").classList.toggle("flipped", !!flipped);
   const fi = $("#frontImg"), bi = $("#backImg");
   fi.classList.toggle("hidden", !c.frontPhoto);
@@ -299,17 +301,8 @@ function renderBackInfo(c) {
 $("#flipArea").addEventListener("click", () => {
   renderDetail(!$("#flipInner").classList.contains("flipped"));
 });
-let touchStartX = null;
-$("#detailView").addEventListener("touchstart", (e) => {
-  touchStartX = e.changedTouches[0].clientX;
-}, { passive: true });
-$("#detailView").addEventListener("touchend", (e) => {
-  if (touchStartX === null) return;
-  const dx = e.changedTouches[0].clientX - touchStartX;
-  touchStartX = null;
-  if (Math.abs(dx) < 60) return;
-  stepCard(dx < 0 ? 1 : -1);
-}, { passive: true });
+$("#prevCardBtn").addEventListener("click", () => stepCard(-1));
+$("#nextCardBtn").addEventListener("click", () => stepCard(1));
 function stepCard(dir) {
   const idx = detailIndex();
   if (idx < 0) return;
@@ -511,114 +504,6 @@ function demoDate(daysAgo, hour) {
   d.setHours(hour || 10, 0, 0, 0);
   return d.toISOString();
 }
-function makeCanvas(w, h) {
-  const canvas = document.createElement("canvas");
-  canvas.width = w; canvas.height = h;
-  const ctx = canvas.getContext("2d");
-  return ctx ? { canvas, ctx } : null;
-}
-const HAND_FONT = "'Hiragino Maru Gothic ProN','Yu Gothic',sans-serif";
-function drawCardFront(c) {
-  const m = makeCanvas(880, 1240);
-  if (!m) return null;
-  const { canvas, ctx } = m;
-  ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, 880, 1240);
-  ctx.strokeStyle = "#333"; ctx.lineWidth = 4; ctx.strokeRect(24, 24, 832, 1192);
-  ctx.fillStyle = "#333";
-  ctx.font = "bold 44px sans-serif"; ctx.textAlign = "center";
-  ctx.fillText("いんどう周作 後援会", 440, 110);
-  ctx.font = "bold 36px sans-serif";
-  ctx.fillText("入会お申込書", 440, 165);
-  ctx.textAlign = "left";
-  ctx.font = "bold 30px sans-serif";
-  ctx.fillText("〈ご本人様〉", 60, 240);
-  const rows = [
-    ["フリガナ", c.furigana],
-    ["お名前", c.name + " 様" + (c.age ? `（${c.age}歳）` : "")],
-    ["ご住所", "〒" + c.zip + " " + c.address],
-    ["電話番号", c.phone],
-    ["携帯番号", c.mobile],
-    ["メール", c.email || ""],
-  ];
-  let y = 290;
-  for (const [label, value] of rows) {
-    const h = label === "ご住所" ? 130 : 84;
-    ctx.strokeStyle = "#333"; ctx.lineWidth = 2; ctx.strokeRect(60, y, 760, h);
-    ctx.fillStyle = "#666"; ctx.font = "24px sans-serif";
-    ctx.fillText(label, 76, y + 36);
-    ctx.fillStyle = "#2a3f9e"; ctx.font = "30px " + HAND_FONT;
-    const text = String(value || "");
-    if (label === "ご住所" && text.length > 24) {
-      ctx.fillText(text.slice(0, 24), 76, y + 78);
-      ctx.fillText(text.slice(24), 76, y + 116);
-    } else {
-      ctx.fillText(text, 76, y + 66);
-    }
-    y += h + 14;
-  }
-  ctx.fillStyle = "#333"; ctx.font = "bold 30px sans-serif";
-  ctx.fillText("〈お預かりした担当者〉", 60, y + 40);
-  y += 66;
-  ctx.strokeStyle = "#333"; ctx.lineWidth = 2; ctx.strokeRect(60, y, 760, 90);
-  ctx.fillStyle = "#2a3f9e"; ctx.font = "30px " + HAND_FONT;
-  ctx.fillText(`郵便局名：${c.staffOffice || ""}　担当者：${c.staffName || ""}`, 76, y + 58);
-  ctx.fillStyle = "#999"; ctx.font = "22px sans-serif"; ctx.textAlign = "right";
-  ctx.fillText("※デモ用の架空データです", 820, 1190);
-  return canvas.toDataURL("image/jpeg", 0.85);
-}
-function drawCardBack(c) {
-  const m = makeCanvas(880, 1240);
-  if (!m) return null;
-  const { canvas, ctx } = m;
-  ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, 880, 1240);
-  ctx.strokeStyle = "#333"; ctx.lineWidth = 4; ctx.strokeRect(24, 24, 832, 1192);
-  ctx.fillStyle = "#333"; ctx.font = "bold 30px sans-serif";
-  ctx.fillText("〈訪問状況の記録等〉", 60, 90);
-  let y = 120;
-  ctx.strokeStyle = "#333"; ctx.lineWidth = 2;
-  ctx.strokeRect(60, y, 760, 56);
-  ctx.fillStyle = "#666"; ctx.font = "24px sans-serif";
-  ctx.fillText("訪問等月日", 76, y + 38);
-  ctx.fillText("訪問状況（担当者）", 300, y + 38);
-  ctx.fillText("確認", 756, y + 38);
-  y += 56;
-  const recs = [...(c.records || [])].sort((a, b) => (a.datetime < b.datetime ? -1 : 1)).slice(0, 6);
-  for (let i = 0; i < 6; i++) {
-    const r = recs[i];
-    ctx.strokeRect(60, y, 760, 74);
-    if (r) {
-      const d = new Date(r.datetime);
-      ctx.fillStyle = "#2a3f9e"; ctx.font = "26px " + HAND_FONT;
-      ctx.fillText(`${d.getMonth() + 1}/${d.getDate()}`, 76, y + 48);
-      const text = `${r.type}：${r.content}`.slice(0, 19);
-      ctx.fillText(text, 300, y + 48);
-      if (r.confirm) { ctx.fillStyle = "#b3261e"; ctx.font = "bold 34px sans-serif"; ctx.fillText("✓", 770, y + 52); }
-    }
-    y += 74;
-  }
-  y += 30;
-  ctx.fillStyle = "#333"; ctx.font = "bold 30px sans-serif";
-  ctx.fillText("〈ご紹介者様〉", 60, y + 10);
-  y += 36;
-  const rows = [
-    ["お名前", (c.introFurigana ? c.introFurigana + "　" : "") + (c.introName || "")],
-    ["郵便局名又は住所", c.introPlace || ""],
-    ["電話番号", c.introPhone || ""],
-    ["本人様との関係", c.introRelation ? c.introRelation + (c.introRelationNote ? `（${c.introRelationNote}）` : "") : ""],
-    ["参考情報", c.introNote || ""],
-  ];
-  for (const [label, value] of rows) {
-    ctx.strokeStyle = "#333"; ctx.lineWidth = 2; ctx.strokeRect(60, y, 760, 74);
-    ctx.fillStyle = "#666"; ctx.font = "22px sans-serif";
-    ctx.fillText(label, 76, y + 32);
-    ctx.fillStyle = "#2a3f9e"; ctx.font = "27px " + HAND_FONT;
-    ctx.fillText(String(value).slice(0, 30), 76, y + 64);
-    y += 74 + 10;
-  }
-  ctx.fillStyle = "#999"; ctx.font = "22px sans-serif"; ctx.textAlign = "right";
-  ctx.fillText("※デモ用の架空データです", 820, 1190);
-  return canvas.toDataURL("image/jpeg", 0.85);
-}
 async function seedDemoIfNeeded() {
   if (!window.DEMO_SEED) return;
   const existing = await idbGetAll("cards");
@@ -640,8 +525,8 @@ async function seedDemoIfNeeded() {
       staffOffice: row[15], staffName: row[16],
       records, frontPhoto: null, backPhoto: null,
     };
-    card.frontPhoto = drawCardFront(card);
-    card.backPhoto = drawCardBack(card);
+    card.frontPhoto = window.DEMO_FRONT_IMG || null;
+    card.backPhoto = window.DEMO_BACK_IMG || null;
     await idbPut("cards", card);
   }
   if (!(await idbGet("meta", "passcode"))) await setupPasscode("1234");

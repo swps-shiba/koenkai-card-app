@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#2f3a8f">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
-<link rel="stylesheet" href="styles.css?v=1">
+<link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
 
@@ -59,13 +59,18 @@
     <div id="flipInner" class="flip-inner">
       <div class="flip-face flip-front">
         <div class="photo-box"><img id="frontImg" alt="カード表面"><span class="no-photo">表面の写真なし</span></div>
-        <p class="flip-hint">タップで裏面を表示／左右スワイプで前後のカード</p>
+        <p class="flip-hint">タップで裏面を表示</p>
       </div>
       <div class="flip-face flip-back">
         <div class="photo-box"><img id="backImg" alt="カード裏面"><span class="no-photo">裏面の写真なし</span></div>
-        <p class="flip-hint">タップで表面を表示／左右スワイプで前後のカード</p>
+        <p class="flip-hint">タップで表面を表示</p>
       </div>
     </div>
+  </div>
+
+  <div class="card-nav">
+    <button id="prevCardBtn" class="ghost-btn" type="button">← 前へ</button>
+    <button id="nextCardBtn" class="ghost-btn" type="button">次へ →</button>
   </div>
 
   <div id="frontInfo" class="info-panel"></div>
@@ -167,7 +172,8 @@
   </div>
 </dialog>
 
+<script src="card-images.js?v=1"></script>
 <script src="seed-data.js?v=1"></script>
-<script src="app.js?v=2"></script>
+<script src="app.js?v=3"></script>
 </body>
 </html>

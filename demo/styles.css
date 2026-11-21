@@ -98,6 +98,8 @@ label { display: block; margin: 10px 0; font-size: 0.92rem; }
 .no-photo { color: #aebadd; position: absolute; }
 .photo-box img:not(.hidden) + .no-photo { display: none; }
 .flip-hint { text-align: center; color: #66708a; font-size: 0.8rem; margin: 8px 0 0; }
+.card-nav { display: flex; justify-content: space-between; margin-top: 10px; }
+.card-nav button:disabled { opacity: 0.35; cursor: default; }
 
 /* 詳細：情報パネル */
 .info-panel {

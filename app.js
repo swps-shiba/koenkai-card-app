@@ -225,6 +225,8 @@ function renderDetail(flipped) {
   if (!c) { renderList(); showView("listView"); return; }
   const idx = detailIndex();
   $("#detailCounter").textContent = idx >= 0 ? `${idx + 1} / ${viewList.length}` : "";
+  $("#prevCardBtn").disabled = idx <= 0;
+  $("#nextCardBtn").disabled = idx < 0 || idx >= viewList.length - 1;
   $("#flipInner").classList.toggle("flipped", !!flipped);
   const fi = $("#frontImg"), bi = $("#backImg");
   fi.classList.toggle("hidden", !c.frontPhoto);
@@ -299,17 +301,8 @@ function renderBackInfo(c) {
 $("#flipArea").addEventListener("click", () => {
   renderDetail(!$("#flipInner").classList.contains("flipped"));
 });
-let touchStartX = null;
-$("#detailView").addEventListener("touchstart", (e) => {
-  touchStartX = e.changedTouches[0].clientX;
-}, { passive: true });
-$("#detailView").addEventListener("touchend", (e) => {
-  if (touchStartX === null) return;
-  const dx = e.changedTouches[0].clientX - touchStartX;
-  touchStartX = null;
-  if (Math.abs(dx) < 60) return;
-  stepCard(dx < 0 ? 1 : -1);
-}, { passive: true });
+$("#prevCardBtn").addEventListener("click", () => stepCard(-1));
+$("#nextCardBtn").addEventListener("click", () => stepCard(1));
 function stepCard(dir) {
   const idx = detailIndex();
   if (idx < 0) return;
