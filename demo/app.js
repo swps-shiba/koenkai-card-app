@@ -493,26 +493,135 @@ for (const ev of ["pointerup", "pointercancel"]) {
   $("#cropOverlay").addEventListener(ev, () => { dragCorner = -1; });
 }
 
-/* OpenCV.js は検出専用に遅延読み込みする。読み込めなくても手動調整で続けられる。 */
-let openCvPromise = null;
-function loadOpenCV() {
-  if (window.cv && window.cv.Mat) return Promise.resolve(window.cv);
-  if (openCvPromise) return openCvPromise;
-  openCvPromise = new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("opencv timeout")), 25000);
-    const script = document.createElement("script");
-    script.src = "https://docs.opencv.org/4.8.0/opencv.js";
-    script.async = true;
-    script.onload = () => {
-      const cv = window.cv;
-      if (!cv) { clearTimeout(timer); reject(new Error("opencv missing")); return; }
-      if (cv.Mat) { clearTimeout(timer); resolve(cv); return; }
-      cv.onRuntimeInitialized = () => { clearTimeout(timer); resolve(cv); };
+/* 四隅検出は Web Worker の中で OpenCV.js を使う。
+   以前はメインスレッドで読み込んでいたため、WASM の初期化中は画面全体が固まってしまった。
+   Worker に隔離すれば、検出が遅い・失敗しても画面は操作でき、タイムアウトで手動調整に切り替わる。 */
+const DETECT_TIMEOUT_MS = 20000;
+const DETECT_WORKER_SRC = `
+"use strict";
+var cvReady = false;
+var waiting = [];
+function orderPts(pts) {
+  var bySum = pts.slice().sort(function (a, b) { return (a.x + a.y) - (b.x + b.y); });
+  var byDiff = pts.slice().sort(function (a, b) { return (a.x - a.y) - (b.x - b.y); });
+  return [bySum[0], byDiff[byDiff.length - 1], bySum[bySum.length - 1], byDiff[0]];
+}
+function detect(imageData) {
+  var src = null, gray = null, blur = null, edges = null, kernel = null, contours = null, hierarchy = null, approx = null;
+  try {
+    src = cv.matFromImageData(imageData);
+    gray = new cv.Mat(); cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
+    blur = new cv.Mat(); cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
+    edges = new cv.Mat(); cv.Canny(blur, edges, 50, 150);
+    kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
+    cv.dilate(edges, edges, kernel, new cv.Point(-1, -1), 1, cv.BORDER_CONSTANT, cv.morphologyDefaultBorderValue());
+    contours = new cv.MatVector(); hierarchy = new cv.Mat();
+    cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+    var best = null, bestArea = 0;
+    for (var i = 0; i < contours.size(); i++) {
+      var cnt = contours.get(i);
+      var area = cv.contourArea(cnt);
+      if (area > bestArea) { bestArea = area; best = cnt; }
+    }
+    if (!best || bestArea < imageData.width * imageData.height * 0.15) return null;
+    var peri = cv.arcLength(best, true);
+    approx = new cv.Mat();
+    cv.approxPolyDP(best, approx, 0.02 * peri, true);
+    if (approx.rows !== 4) return null;
+    var pts = [];
+    for (var j = 0; j < 4; j++) pts.push({ x: approx.data32S[j * 2], y: approx.data32S[j * 2 + 1] });
+    return orderPts(pts);
+  } catch (e) {
+    return null;
+  } finally {
+    var mats = [src, gray, blur, edges, kernel, contours, hierarchy, approx];
+    for (var k = 0; k < mats.length; k++) { if (mats[k]) { try { mats[k].delete(); } catch (e) {} } }
+  }
+}
+self.onmessage = function (e) {
+  var msg = e.data;
+  var run = function () {
+    var pts = null;
+    try { pts = detect(msg.imageData); } catch (err) { pts = null; }
+    self.postMessage({ id: msg.id, pts: pts });
+  };
+  if (cvReady) run(); else waiting.push(run);
+};
+try {
+  importScripts("https://docs.opencv.org/4.8.0/opencv.js");
+  if (typeof cv !== "undefined" && cv) {
+    if (cv.Mat) cvReady = true;
+    else cv.onRuntimeInitialized = function () {
+      cvReady = true;
+      var q = waiting; waiting = [];
+      for (var i = 0; i < q.length; i++) q[i]();
     };
-    script.onerror = () => { clearTimeout(timer); reject(new Error("opencv load failed")); };
-    document.head.appendChild(script);
+  }
+} catch (e) { /* 読み込めなければ本体側のタイムアウトで手動調整になる */ }
+`;
+let detectWorker = null;
+let detectSeq = 0;
+let detectPending = null; // { id, timer, finish }
+function getDetectWorker() {
+  if (detectWorker) return detectWorker;
+  if (typeof Worker === "undefined" || typeof URL === "undefined" || !URL.createObjectURL) return null;
+  try {
+    const blob = new Blob([DETECT_WORKER_SRC], { type: "text/javascript" });
+    detectWorker = new Worker(URL.createObjectURL(blob));
+    detectWorker.onmessage = (e) => {
+      if (detectPending && e.data && e.data.id === detectPending.id) {
+        const p = detectPending; detectPending = null;
+        clearTimeout(p.timer); p.finish(e.data.pts || null, true);
+      }
+    };
+    detectWorker.onerror = () => {
+      try { detectWorker.terminate(); } catch (e) {}
+      detectWorker = null;
+      if (detectPending) { const p = detectPending; detectPending = null; clearTimeout(p.timer); p.finish(null, false); }
+    };
+    return detectWorker;
+  } catch (e) {
+    return null;
+  }
+}
+/* 四隅検出を実行する。戻り値 { ok, pts }：pts は元画像座標の [TL, TR, BR, BL]、ok=false は検出自体が使えなかった場合 */
+function runDetection(img) {
+  return new Promise((resolve) => {
+    const done = (pts, ran) => resolve({ ok: ran, pts });
+    const worker = getDetectWorker();
+    if (!worker) { done(null, false); return; }
+    if (detectPending) { const p = detectPending; detectPending = null; clearTimeout(p.timer); p.finish(null, false); }
+    const maxDim = 800;
+    const scale = Math.min(1, maxDim / Math.max(imgW(img), imgH(img)));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(imgW(img) * scale);
+    canvas.height = Math.round(imgH(img) * scale);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) { done(null, false); return; }
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    let imageData;
+    try { imageData = ctx.getImageData(0, 0, canvas.width, canvas.height); }
+    catch (e) { done(null, false); return; }
+    const id = ++detectSeq;
+    const timer = setTimeout(() => {
+      if (detectPending && detectPending.id === id) {
+        detectPending = null;
+        try { worker.terminate(); } catch (e) {}
+        if (detectWorker === worker) detectWorker = null;
+        done(null, false);
+      }
+    }, DETECT_TIMEOUT_MS);
+    detectPending = {
+      id, timer,
+      finish: (pts, ran) => done(pts ? pts.map((p) => ({ x: p.x / scale, y: p.y / scale })) : null, ran),
+    };
+    try { worker.postMessage({ id, imageData }, [imageData.data.buffer]); }
+    catch (e) {
+      if (detectPending && detectPending.id === id) detectPending = null;
+      clearTimeout(timer);
+      done(null, false);
+    }
   });
-  return openCvPromise;
 }
 
 function orderCorners(pts) {
@@ -523,68 +632,19 @@ function orderCorners(pts) {
 
 async function detectCorners() {
   if (!cropState) return;
+  const target = cropState;
   const status = $("#cropStatus");
-  try {
-    const cv = await loadOpenCV();
-    const found = detectWithOpenCV(cv, cropState.img);
-    if (!cropState) return;
-    if (found) {
-      cropState.corners = found;
-      status.textContent = "四隅を検出しました。ずれているときは丸をドラッグして直してください。";
-    } else {
-      status.textContent = "自動検出できませんでした。丸をドラッグして四隅を合わせてください。";
-    }
-  } catch (e) {
-    if (cropState) status.textContent = "自動検出は使えませんでした（通信環境）。丸をドラッグして四隅を合わせてください。";
+  const { ok, pts } = await runDetection(target.img);
+  if (!cropState || cropState !== target) return;
+  if (pts) {
+    cropState.corners = pts;
+    status.textContent = "四隅を検出しました。ずれているときは丸をドラッグして直してください。";
+  } else if (ok) {
+    status.textContent = "自動検出できませんでした。丸をドラッグして四隅を合わせてください。";
+  } else {
+    status.textContent = "自動検出は使えませんでした。丸をドラッグして四隅を合わせてください。";
   }
   layoutCropOverlay();
-}
-
-function detectWithOpenCV(cv, img) {
-  const maxDim = 800;
-  const scale = Math.min(1, maxDim / Math.max(imgW(img), imgH(img)));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(imgW(img) * scale);
-  canvas.height = Math.round(imgH(img) * scale);
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
-  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-  let src, gray, blur, edges, kernel, contours, hierarchy;
-  try {
-    src = cv.imread(canvas);
-    gray = new cv.Mat(); cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
-    blur = new cv.Mat(); cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
-    edges = new cv.Mat(); cv.Canny(blur, edges, 50, 150);
-    kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
-    cv.dilate(edges, edges, kernel, new cv.Point(-1, -1), 1, cv.BORDER_CONSTANT, cv.morphologyDefaultBorderValue());
-    contours = new cv.MatVector(); hierarchy = new cv.Mat();
-    cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-    let best = null, bestArea = 0;
-    for (let i = 0; i < contours.size(); i++) {
-      const cnt = contours.get(i);
-      const area = cv.contourArea(cnt);
-      if (area > bestArea) { bestArea = area; best = cnt; }
-    }
-    if (!best || bestArea < canvas.width * canvas.height * 0.15) return null;
-    const peri = cv.arcLength(best, true);
-    const approx = new cv.Mat();
-    cv.approxPolyDP(best, approx, 0.02 * peri, true);
-    let pts = null;
-    if (approx.rows === 4) {
-      pts = [];
-      for (let i = 0; i < 4; i++) {
-        pts.push({ x: approx.data32S[i * 2] / scale, y: approx.data32S[i * 2 + 1] / scale });
-      }
-    }
-    approx.delete();
-    return pts ? orderCorners(pts) : null;
-  } catch (e) {
-    return null;
-  } finally {
-    for (const m of [src, gray, blur, edges, kernel, contours, hierarchy]) {
-      if (m) { try { m.delete(); } catch (e) {} }
-    }
-  }
 }
 
 /* 透視変換（ホモグラフィ＋三角形メッシュ描画） */

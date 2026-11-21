@@ -1,5 +1,5 @@
-const CACHE = "koenkai-cards-demo-v5";
-const ASSETS = ["./", "./index.html", "./styles.css?v=3", "./app.js?v=4", "./seed-data.js?v=1", "./card-images.js?v=1", "./manifest.webmanifest", "./icon.svg"];
+const CACHE = "koenkai-cards-demo-v6";
+const ASSETS = ["./", "./index.html", "./styles.css?v=3", "./app.js?v=5", "./seed-data.js?v=1", "./card-images.js?v=1", "./manifest.webmanifest", "./icon.svg"];
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
 });

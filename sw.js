@@ -1,6 +1,6 @@
 /* 後援会カード管理 サービスワーカー（アプリ本体のキャッシュのみ。データは扱わない） */
-const CACHE = "koenkai-cards-v4";
-const ASSETS = ["./", "./index.html", "./styles.css?v=3", "./app.js?v=4", "./manifest.webmanifest", "./icon.svg"];
+const CACHE = "koenkai-cards-v5";
+const ASSETS = ["./", "./index.html", "./styles.css?v=3", "./app.js?v=5", "./manifest.webmanifest", "./icon.svg"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
