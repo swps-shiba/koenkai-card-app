@@ -100,6 +100,12 @@ label { display: block; margin: 10px 0; font-size: 0.92rem; }
 .flip-hint { text-align: center; color: #66708a; font-size: 0.8rem; margin: 8px 0 0; }
 .card-nav { display: flex; justify-content: space-between; margin-top: 10px; }
 .card-nav button:disabled { opacity: 0.35; cursor: default; }
+.crop-stage { position: relative; max-width: 560px; margin: 0 auto; background: #222; border-radius: 10px; overflow: hidden; }
+.crop-stage img { display: block; width: 100%; height: auto; }
+.crop-overlay { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+.crop-overlay polygon { fill: rgba(47, 58, 143, 0.18); stroke: #7ea0ff; stroke-width: 2; }
+.crop-handle { fill: rgba(255,255,255,0.9); stroke: #2f3a8f; stroke-width: 3; cursor: grab; touch-action: none; }
+.crop-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: space-between; margin-top: 12px; }
 
 /* 詳細：情報パネル */
 .info-panel {

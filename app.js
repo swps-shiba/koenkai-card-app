@@ -411,31 +411,300 @@ function updatePreview(sel, dataUrl) {
   img.classList.toggle("hidden", !dataUrl);
   if (dataUrl) img.src = dataUrl;
 }
+/* ---------- 写真の取り込み（四隅の自動検出＋手動補正＋台形補正） ---------- */
+let cropState = null; // { img, previewSel, setter, corners: [TL, TR, BR, BL]（画像実寸px） }
+
 function readPhoto(input, previewSel, setter) {
   const file = input.files && input.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = () => {
     const img = new Image();
-    img.onload = () => {
-      const max = 1600;
-      const scale = Math.min(1, max / Math.max(img.width, img.height));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-      setter(dataUrl);
-      updatePreview(previewSel, dataUrl);
-    };
+    img.onload = () => openCrop(img, previewSel, setter);
     img.src = reader.result;
   };
   reader.readAsDataURL(file);
+  input.value = "";
 }
 $("#fFrontPhoto").addEventListener("change", (e) =>
   readPhoto(e.target, "#fFrontPreview", (d) => { pendingFrontPhoto = d; }));
 $("#fBackPhoto").addEventListener("change", (e) =>
   readPhoto(e.target, "#fBackPreview", (d) => { pendingBackPhoto = d; }));
+
+function imgW(img) { return img.naturalWidth || img.width; }
+function imgH(img) { return img.naturalHeight || img.height; }
+
+function defaultCorners(img) {
+  const mx = imgW(img) * 0.06, my = imgH(img) * 0.06;
+  return [
+    { x: mx, y: my },
+    { x: imgW(img) - mx, y: my },
+    { x: imgW(img) - mx, y: imgH(img) - my },
+    { x: mx, y: imgH(img) - my },
+  ];
+}
+
+function openCrop(img, previewSel, setter) {
+  cropState = { img, previewSel, setter, corners: defaultCorners(img) };
+  $("#cropImg").src = img.src;
+  $("#cropStatus").textContent = "カードの四隅を検出しています…";
+  showView("cropView");
+  requestAnimationFrame(() => { layoutCropOverlay(); detectCorners(); });
+}
+
+function cropScale() {
+  const rect = $("#cropImg").getBoundingClientRect();
+  return { rect, sx: imgW(cropState.img) / rect.width, sy: imgH(cropState.img) / rect.height };
+}
+
+function layoutCropOverlay() {
+  if (!cropState) return;
+  const { rect, sx, sy } = cropScale();
+  if (!rect.width) return;
+  const svg = $("#cropOverlay");
+  svg.setAttribute("viewBox", `0 0 ${rect.width} ${rect.height}`);
+  $("#cropPoly").setAttribute("points", cropState.corners.map((p) => `${p.x / sx},${p.y / sy}`).join(" "));
+  svg.querySelectorAll(".crop-handle").forEach((h, i) => {
+    h.setAttribute("cx", cropState.corners[i].x / sx);
+    h.setAttribute("cy", cropState.corners[i].y / sy);
+  });
+}
+window.addEventListener("resize", layoutCropOverlay);
+
+let dragCorner = -1;
+$("#cropOverlay").addEventListener("pointerdown", (e) => {
+  if (!e.target.classList || !e.target.classList.contains("crop-handle")) return;
+  dragCorner = Number(e.target.dataset.corner);
+  e.preventDefault();
+  $("#cropOverlay").setPointerCapture(e.pointerId);
+});
+$("#cropOverlay").addEventListener("pointermove", (e) => {
+  if (dragCorner < 0 || !cropState) return;
+  const { rect, sx, sy } = cropScale();
+  cropState.corners[dragCorner] = {
+    x: Math.min(Math.max((e.clientX - rect.left) * sx, 0), imgW(cropState.img)),
+    y: Math.min(Math.max((e.clientY - rect.top) * sy, 0), imgH(cropState.img)),
+  };
+  layoutCropOverlay();
+});
+for (const ev of ["pointerup", "pointercancel"]) {
+  $("#cropOverlay").addEventListener(ev, () => { dragCorner = -1; });
+}
+
+/* OpenCV.js は検出専用に遅延読み込みする。読み込めなくても手動調整で続けられる。 */
+let openCvPromise = null;
+function loadOpenCV() {
+  if (window.cv && window.cv.Mat) return Promise.resolve(window.cv);
+  if (openCvPromise) return openCvPromise;
+  openCvPromise = new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("opencv timeout")), 25000);
+    const script = document.createElement("script");
+    script.src = "https://docs.opencv.org/4.8.0/opencv.js";
+    script.async = true;
+    script.onload = () => {
+      const cv = window.cv;
+      if (!cv) { clearTimeout(timer); reject(new Error("opencv missing")); return; }
+      if (cv.Mat) { clearTimeout(timer); resolve(cv); return; }
+      cv.onRuntimeInitialized = () => { clearTimeout(timer); resolve(cv); };
+    };
+    script.onerror = () => { clearTimeout(timer); reject(new Error("opencv load failed")); };
+    document.head.appendChild(script);
+  });
+  return openCvPromise;
+}
+
+function orderCorners(pts) {
+  const bySum = [...pts].sort((a, b) => (a.x + a.y) - (b.x + b.y));
+  const byDiff = [...pts].sort((a, b) => (a.x - a.y) - (b.x - b.y));
+  return [bySum[0], byDiff[byDiff.length - 1], bySum[bySum.length - 1], byDiff[0]]; // TL, TR, BR, BL
+}
+
+async function detectCorners() {
+  if (!cropState) return;
+  const status = $("#cropStatus");
+  try {
+    const cv = await loadOpenCV();
+    const found = detectWithOpenCV(cv, cropState.img);
+    if (!cropState) return;
+    if (found) {
+      cropState.corners = found;
+      status.textContent = "四隅を検出しました。ずれているときは丸をドラッグして直してください。";
+    } else {
+      status.textContent = "自動検出できませんでした。丸をドラッグして四隅を合わせてください。";
+    }
+  } catch (e) {
+    if (cropState) status.textContent = "自動検出は使えませんでした（通信環境）。丸をドラッグして四隅を合わせてください。";
+  }
+  layoutCropOverlay();
+}
+
+function detectWithOpenCV(cv, img) {
+  const maxDim = 800;
+  const scale = Math.min(1, maxDim / Math.max(imgW(img), imgH(img)));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(imgW(img) * scale);
+  canvas.height = Math.round(imgH(img) * scale);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  let src, gray, blur, edges, kernel, contours, hierarchy;
+  try {
+    src = cv.imread(canvas);
+    gray = new cv.Mat(); cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
+    blur = new cv.Mat(); cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
+    edges = new cv.Mat(); cv.Canny(blur, edges, 50, 150);
+    kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
+    cv.dilate(edges, edges, kernel, new cv.Point(-1, -1), 1, cv.BORDER_CONSTANT, cv.morphologyDefaultBorderValue());
+    contours = new cv.MatVector(); hierarchy = new cv.Mat();
+    cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+    let best = null, bestArea = 0;
+    for (let i = 0; i < contours.size(); i++) {
+      const cnt = contours.get(i);
+      const area = cv.contourArea(cnt);
+      if (area > bestArea) { bestArea = area; best = cnt; }
+    }
+    if (!best || bestArea < canvas.width * canvas.height * 0.15) return null;
+    const peri = cv.arcLength(best, true);
+    const approx = new cv.Mat();
+    cv.approxPolyDP(best, approx, 0.02 * peri, true);
+    let pts = null;
+    if (approx.rows === 4) {
+      pts = [];
+      for (let i = 0; i < 4; i++) {
+        pts.push({ x: approx.data32S[i * 2] / scale, y: approx.data32S[i * 2 + 1] / scale });
+      }
+    }
+    approx.delete();
+    return pts ? orderCorners(pts) : null;
+  } catch (e) {
+    return null;
+  } finally {
+    for (const m of [src, gray, blur, edges, kernel, contours, hierarchy]) {
+      if (m) { try { m.delete(); } catch (e) {} }
+    }
+  }
+}
+
+/* 透視変換（ホモグラフィ＋三角形メッシュ描画） */
+function solveLinear(A, b) {
+  const n = b.length;
+  const M = A.map((row, i) => [...row, b[i]]);
+  for (let col = 0, row = 0; col < n && row < n; col++, row++) {
+    let pivot = row;
+    for (let r = row + 1; r < n; r++) if (Math.abs(M[r][col]) > Math.abs(M[pivot][col])) pivot = r;
+    const tmp = M[row]; M[row] = M[pivot]; M[pivot] = tmp;
+    const div = M[row][col] || 1e-12;
+    for (let j = col; j <= n; j++) M[row][j] /= div;
+    for (let r = 0; r < n; r++) {
+      if (r === row) continue;
+      const factor = M[r][col];
+      if (!factor) continue;
+      for (let j = col; j <= n; j++) M[r][j] -= factor * M[row][j];
+    }
+  }
+  return M.map((row) => row[n]);
+}
+function computeHomography(src, dst) {
+  const A = [], b = [];
+  for (let i = 0; i < 4; i++) {
+    const { x, y } = src[i]; const u = dst[i].x, v = dst[i].y;
+    A.push([x, y, 1, 0, 0, 0, -u * x, -u * y]); b.push(u);
+    A.push([0, 0, 0, x, y, 1, -v * x, -v * y]); b.push(v);
+  }
+  const h = solveLinear(A, b);
+  return [h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7], 1];
+}
+function applyH(H, x, y) {
+  const w = H[6] * x + H[7] * y + H[8];
+  return { x: (H[0] * x + H[1] * y + H[2]) / w, y: (H[3] * x + H[4] * y + H[5]) / w };
+}
+function affineFromTriangles(f0, f1, f2, t0, t1, t2) {
+  const det = f0.x * (f1.y - f2.y) - f0.y * (f1.x - f2.x) + (f1.x * f2.y - f2.x * f1.y);
+  if (!det) return null;
+  const inv = [
+    [(f1.y - f2.y) / det, (f2.y - f0.y) / det, (f0.y - f1.y) / det],
+    [(f2.x - f1.x) / det, (f0.x - f2.x) / det, (f1.x - f0.x) / det],
+    [(f1.x * f2.y - f2.x * f1.y) / det, (f2.x * f0.y - f0.x * f2.y) / det, (f0.x * f1.y - f1.x * f0.y) / det],
+  ];
+  const px = inv.map((row) => row[0] * t0.x + row[1] * t1.x + row[2] * t2.x);
+  const py = inv.map((row) => row[0] * t0.y + row[1] * t1.y + row[2] * t2.y);
+  return { a: px[0], b: px[1], e: px[2], c: py[0], d: py[1], f: py[2] };
+}
+function drawTri(ctx, img, s0, s1, s2, d0, d1, d2) {
+  const t = affineFromTriangles(s0, s1, s2, d0, d1, d2);
+  if (!t) return;
+  const cx = (d0.x + d1.x + d2.x) / 3, cy = (d0.y + d1.y + d2.y) / 3;
+  const ex = (p) => ({ x: cx + (p.x - cx) * 1.03, y: cy + (p.y - cy) * 1.03 });
+  const e0 = ex(d0), e1 = ex(d1), e2 = ex(d2);
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(e0.x, e0.y); ctx.lineTo(e1.x, e1.y); ctx.lineTo(e2.x, e2.y); ctx.closePath();
+  ctx.clip();
+  ctx.setTransform(t.a, t.c, t.b, t.d, t.e, t.f);
+  ctx.drawImage(img, 0, 0);
+  ctx.restore();
+}
+function warpToCanvas(img, corners) {
+  const [tl, tr, br, bl] = corners;
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  let outW = Math.round(Math.max(dist(tl, tr), dist(bl, br)));
+  let outH = Math.round(Math.max(dist(tl, bl), dist(tr, br)));
+  const s = Math.min(1, 1400 / Math.max(outW, outH));
+  outW = Math.max(2, Math.round(outW * s)); outH = Math.max(2, Math.round(outH * s));
+  const canvas = document.createElement("canvas");
+  canvas.width = outW; canvas.height = outH;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  const dst = [{ x: 0, y: 0 }, { x: outW, y: 0 }, { x: outW, y: outH }, { x: 0, y: outH }];
+  const H = computeHomography(dst, corners); // 出力px → 入力px
+  const cols = 24, rows = 32;
+  for (let gy = 0; gy < rows; gy++) {
+    for (let gx = 0; gx < cols; gx++) {
+      const x0 = (gx / cols) * outW, x1 = ((gx + 1) / cols) * outW;
+      const y0 = (gy / rows) * outH, y1 = ((gy + 1) / rows) * outH;
+      const p00 = applyH(H, x0, y0), p10 = applyH(H, x1, y0), p11 = applyH(H, x1, y1), p01 = applyH(H, x0, y1);
+      drawTri(ctx, img, p00, p10, p01, { x: x0, y: y0 }, { x: x1, y: y0 }, { x: x0, y: y1 });
+      drawTri(ctx, img, p10, p11, p01, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 });
+    }
+  }
+  return canvas;
+}
+
+function closeCrop() { cropState = null; showView("formView"); }
+$("#cropCancelBtn").addEventListener("click", closeCrop);
+$("#cropApplyBtn").addEventListener("click", () => {
+  if (!cropState) return;
+  const canvas = warpToCanvas(cropState.img, cropState.corners);
+  if (canvas) {
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    cropState.setter(dataUrl);
+    updatePreview(cropState.previewSel, dataUrl);
+  }
+  closeCrop();
+});
+$("#cropRawBtn").addEventListener("click", () => {
+  if (!cropState) return;
+  const img = cropState.img;
+  const scale = Math.min(1, 1600 / Math.max(imgW(img), imgH(img)));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(imgW(img) * scale);
+  canvas.height = Math.round(imgH(img) * scale);
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    cropState.setter(dataUrl);
+    updatePreview(cropState.previewSel, dataUrl);
+  }
+  closeCrop();
+});
+$("#cropRedetectBtn").addEventListener("click", () => {
+  if (!cropState) return;
+  cropState.corners = defaultCorners(cropState.img);
+  layoutCropOverlay();
+  $("#cropStatus").textContent = "カードの四隅を検出しています…";
+  detectCorners();
+});
 $("#cancelFormBtn").addEventListener("click", () => {
   if (editingId) { currentId = editingId; renderDetail(false); showView("detailView"); }
   else { renderList(); showView("listView"); }

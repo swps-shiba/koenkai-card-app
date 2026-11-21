@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#2f3a8f">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
-<link rel="stylesheet" href="styles.css?v=2">
+<link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
 
@@ -131,6 +131,32 @@
     <p id="formError" class="error"></p>
     <button type="submit" class="primary-btn big">保存する</button>
   </form>
+</section>
+
+<!-- 写真の四隅合わせ -->
+<section id="cropView" class="view hidden">
+  <header class="sub-header">
+    <button id="cropCancelBtn" class="ghost-btn" type="button">← 戻る</button>
+    <h1>四隅を合わせる</h1>
+    <span></span>
+  </header>
+  <p class="hint" id="cropStatus">カードの四隅を検出しています…</p>
+  <div id="cropStage" class="crop-stage">
+    <img id="cropImg" alt="取り込み写真">
+    <svg id="cropOverlay" class="crop-overlay">
+      <polygon id="cropPoly" points=""></polygon>
+      <circle class="crop-handle" data-corner="0" r="18"></circle>
+      <circle class="crop-handle" data-corner="1" r="18"></circle>
+      <circle class="crop-handle" data-corner="2" r="18"></circle>
+      <circle class="crop-handle" data-corner="3" r="18"></circle>
+    </svg>
+  </div>
+  <p class="hint">ずれているときは、丸をドラッグしてカードの角に合わせてください。</p>
+  <div class="form-actions crop-actions">
+    <button id="cropRawBtn" class="ghost-btn" type="button">補正せず使う</button>
+    <button id="cropRedetectBtn" class="ghost-btn" type="button">検出し直す</button>
+    <button id="cropApplyBtn" class="primary-btn" type="button">この範囲で取り込む</button>
+  </div>
 </section>
 
 <!-- 活動記録ダイアログ -->
