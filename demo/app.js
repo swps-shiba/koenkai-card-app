@@ -590,7 +590,7 @@ function drawCardBack(c) {
       const d = new Date(r.datetime);
       ctx.fillStyle = "#2a3f9e"; ctx.font = "26px " + HAND_FONT;
       ctx.fillText(`${d.getMonth() + 1}/${d.getDate()}`, 76, y + 48);
-      const text = `${r.type}：${r.content}`.slice(0, 26);
+      const text = `${r.type}：${r.content}`.slice(0, 19);
       ctx.fillText(text, 300, y + 48);
       if (r.confirm) { ctx.fillStyle = "#b3261e"; ctx.font = "bold 34px sans-serif"; ctx.fillText("✓", 770, y + 52); }
     }
