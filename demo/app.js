@@ -129,7 +129,7 @@ async function persistCard(card) {
 
 /* ---------- 画面切替 ---------- */
 function showView(id) {
-  for (const v of ["lockView", "listView", "detailView", "formView"]) {
+  for (const v of ["lockView", "listView", "detailView", "formView", "cropView"]) {
     $("#" + v).classList.toggle("hidden", v !== id);
   }
 }
@@ -330,7 +330,7 @@ function openRecordDialog(recordId) {
   if (!c) return;
   editingRecordId = recordId;
   const r = recordId ? (c.records || []).find((x) => x.id === recordId) : null;
-  $("#recordDialogTitle").textContent = r ? "記録を編集" : "記録を追加";
+  $("#recordDialogTitle").textContent = r ? `${c.name} 様の記録を編集` : `${c.name} 様の記録を追加`;
   $("#rDateTime").value = toLocalInput(r ? r.datetime : new Date().toISOString());
   $("#rType").value = r ? r.type : "訪問";
   $("#rContent").value = r ? r.content || "" : "";
@@ -421,6 +421,7 @@ function readPhoto(input, previewSel, setter) {
   reader.onload = () => {
     const img = new Image();
     img.onload = () => openCrop(img, previewSel, setter);
+    img.onerror = () => { $("#formError").textContent = "写真を読み込めませんでした。別の写真で試してください。"; };
     img.src = reader.result;
   };
   reader.readAsDataURL(file);
@@ -470,6 +471,7 @@ function layoutCropOverlay() {
   });
 }
 window.addEventListener("resize", layoutCropOverlay);
+$("#cropImg").addEventListener("load", layoutCropOverlay);
 
 let dragCorner = -1;
 $("#cropOverlay").addEventListener("pointerdown", (e) => {
