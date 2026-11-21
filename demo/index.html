@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>後援会カード管理（デモ）</title>
+<meta name="theme-color" content="#2f3a8f">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="stylesheet" href="styles.css?v=1">
+</head>
+<body>
+
+<!-- ロック画面 -->
+<section id="lockView" class="view">
+  <div class="lock-box">
+    <div class="lock-icon">🗂️</div>
+    <h1>後援会カード管理</h1>
+    <p id="lockMessage">パスコードを入力してください</p>
+    <form id="lockForm">
+      <input id="lockInput" type="password" inputmode="numeric" autocomplete="off" placeholder="パスコード">
+      <input id="lockInput2" type="password" inputmode="numeric" autocomplete="off" placeholder="パスコード（確認）" class="hidden">
+      <button type="submit" id="lockButton">開く</button>
+    </form>
+    <p id="lockError" class="error"></p>
+    <p class="lock-note">デモ版です。パスコードは <strong>1234</strong> に設定されています。<br>登録されているデータはすべて架空のものです。</p>
+  </div>
+</section>
+
+<!-- 一覧画面 -->
+<section id="listView" class="view hidden">
+  <header class="app-header">
+    <h1>後援会カード</h1>
+    <div class="header-actions">
+      <button id="lockNowBtn" class="ghost-btn" type="button">🔒 ロック</button>
+      <button id="addCardBtn" class="primary-btn" type="button">＋ 登録</button>
+    </div>
+  </header>
+  <div class="search-row">
+    <input id="searchInput" type="search" placeholder="名前・住所で検索">
+    <span id="cardCount" class="count"></span>
+  </div>
+  <div id="cardList" class="card-list"></div>
+  <p id="emptyMessage" class="empty hidden">まだカードが登録されていません。「＋ 登録」から追加してください。</p>
+</section>
+
+<!-- 詳細画面 -->
+<section id="detailView" class="view hidden">
+  <header class="app-header">
+    <button id="backToListBtn" class="ghost-btn" type="button">← 一覧</button>
+    <span id="detailCounter" class="counter"></span>
+    <div class="header-actions">
+      <button id="editCardBtn" class="ghost-btn" type="button">編集</button>
+      <button id="deleteCardBtn" class="danger-btn" type="button">削除</button>
+    </div>
+  </header>
+
+  <div id="flipArea" class="flip-area">
+    <div id="flipInner" class="flip-inner">
+      <div class="flip-face flip-front">
+        <div class="photo-box"><img id="frontImg" alt="カード表面"><span class="no-photo">表面の写真なし</span></div>
+        <p class="flip-hint">タップで裏面を表示／左右スワイプで前後のカード</p>
+      </div>
+      <div class="flip-face flip-back">
+        <div class="photo-box"><img id="backImg" alt="カード裏面"><span class="no-photo">裏面の写真なし</span></div>
+        <p class="flip-hint">タップで表面を表示／左右スワイプで前後のカード</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="frontInfo" class="info-panel"></div>
+  <div id="backInfo" class="info-panel hidden"></div>
+</section>
+
+<!-- 登録・編集画面 -->
+<section id="formView" class="view hidden">
+  <header class="app-header">
+    <button id="cancelFormBtn" class="ghost-btn" type="button">← 戻る</button>
+    <h1 id="formTitle">カード登録</h1>
+    <span></span>
+  </header>
+  <form id="cardForm" class="card-form">
+    <fieldset>
+      <legend>写真</legend>
+      <label>表面 <input id="fFrontPhoto" type="file" accept="image/*" capture="environment"></label>
+      <img id="fFrontPreview" class="preview hidden" alt="表面プレビュー">
+      <label>裏面 <input id="fBackPhoto" type="file" accept="image/*" capture="environment"></label>
+      <img id="fBackPreview" class="preview hidden" alt="裏面プレビュー">
+    </fieldset>
+    <fieldset>
+      <legend>ご本人様</legend>
+      <label>フリガナ <input id="fFurigana" type="text" autocomplete="off"></label>
+      <label>お名前 <input id="fName" type="text" autocomplete="off" required></label>
+      <label>年齢 <input id="fAge" type="number" min="0" max="130"></label>
+      <label>郵便番号 <span class="zip-row"><input id="fZip" type="text" inputmode="numeric" placeholder="例 0640805" autocomplete="off"><button id="zipSearchBtn" type="button">住所を検索</button></span></label>
+      <p id="zipStatus" class="zip-status"></p>
+      <label>ご住所 <textarea id="fAddress" rows="2"></textarea></label>
+      <label>電話番号 <input id="fPhone" type="tel" autocomplete="off"></label>
+      <label>携帯番号 <input id="fMobile" type="tel" autocomplete="off"></label>
+      <label>メールアドレス <input id="fEmail" type="email" autocomplete="off"></label>
+    </fieldset>
+    <fieldset>
+      <legend>ご紹介者様</legend>
+      <label>フリガナ <input id="fIntroFurigana" type="text" autocomplete="off"></label>
+      <label>お名前 <input id="fIntroName" type="text" autocomplete="off"></label>
+      <label>郵便局名 又は ご住所 <input id="fIntroPlace" type="text" autocomplete="off"></label>
+      <label>電話番号 <input id="fIntroPhone" type="tel" autocomplete="off"></label>
+      <label>本人様との関係
+        <select id="fIntroRelation">
+          <option value="">（未選択）</option>
+          <option>家族</option>
+          <option>親戚</option>
+          <option>郵政関係</option>
+          <option>友人・知人</option>
+          <option>その他</option>
+        </select>
+      </label>
+      <label>続柄・関係のメモ <input id="fIntroRelationNote" type="text" autocomplete="off"></label>
+      <label>参考情報 <textarea id="fIntroNote" rows="2"></textarea></label>
+    </fieldset>
+    <fieldset>
+      <legend>お預かりした担当者</legend>
+      <label>郵便局名 <input id="fStaffOffice" type="text" autocomplete="off"></label>
+      <label>担当者名 <input id="fStaffName" type="text" autocomplete="off"></label>
+    </fieldset>
+    <p id="formError" class="error"></p>
+    <button type="submit" class="primary-btn big">保存する</button>
+  </form>
+</section>
+
+<!-- 活動記録ダイアログ -->
+<dialog id="recordDialog">
+  <form id="recordForm" method="dialog">
+    <h2 id="recordDialogTitle">記録を追加</h2>
+    <label>日時 <input id="rDateTime" type="datetime-local" required></label>
+    <label>種別
+      <select id="rType">
+        <option>訪問</option>
+        <option>電話</option>
+        <option>その他</option>
+      </select>
+    </label>
+    <label>内容 <textarea id="rContent" rows="3"></textarea></label>
+    <label>担当者 <input id="rStaff" type="text" autocomplete="off"></label>
+    <fieldset class="confirm-box">
+      <legend>確認</legend>
+      <label class="check-row"><input id="rConfirmed" type="checkbox"> 確認済みにする</label>
+      <label>確認した人 <input id="rConfirmName" type="text" autocomplete="off"></label>
+      <label>確認した日時 <input id="rConfirmDate" type="datetime-local"></label>
+    </fieldset>
+    <div class="dialog-buttons">
+      <button id="recordDeleteBtn" type="button" class="danger-btn hidden">この記録を削除</button>
+      <span class="spacer"></span>
+      <button id="recordCancelBtn" type="button" class="ghost-btn">キャンセル</button>
+      <button id="recordSaveBtn" type="submit" class="primary-btn">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- 確認詳細ダイアログ -->
+<dialog id="confirmDialog">
+  <h2>確認の詳細</h2>
+  <p id="confirmDetailText"></p>
+  <div class="dialog-buttons">
+    <span class="spacer"></span>
+    <button id="confirmCloseBtn" type="button" class="primary-btn">閉じる</button>
+  </div>
+</dialog>
+
+<script src="seed-data.js?v=1"></script>
+<script src="app.js?v=1"></script>
+</body>
+</html>

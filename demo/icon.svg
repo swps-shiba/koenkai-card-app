@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#2f3a8f"/>
+  <rect x="96" y="128" width="320" height="256" rx="24" fill="#ffffff"/>
+  <rect x="96" y="128" width="320" height="64" rx="24" fill="#c8cdf0"/>
+  <text x="256" y="330" font-size="150" text-anchor="middle" fill="#2f3a8f" font-family="'Hiragino Kaku Gothic ProN','Yu Gothic','Noto Sans JP',sans-serif" font-weight="bold">援</text>
+</svg>
