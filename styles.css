@@ -1,0 +1,165 @@
+:root {
+  --ink: #22304a;
+  --accent: #2f3a8f;
+  --accent-soft: #eef0fb;
+  --line: #d5dae6;
+  --danger: #b3261e;
+  --bg: #f6f7fb;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP", sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+}
+.hidden { display: none !important; }
+.view { max-width: 720px; margin: 0 auto; padding: 16px 14px 40px; }
+h1 { font-size: 1.25rem; margin: 0; }
+.error { color: var(--danger); min-height: 1.2em; font-size: 0.9rem; }
+button { font: inherit; cursor: pointer; }
+input, select, textarea {
+  font: inherit; padding: 10px; border: 1px solid var(--line);
+  border-radius: 8px; width: 100%; background: #fff; color: var(--ink);
+}
+label { display: block; margin: 10px 0; font-size: 0.92rem; }
+.primary-btn {
+  background: var(--accent); color: #fff; border: none;
+  padding: 10px 18px; border-radius: 999px; font-weight: 700;
+}
+.primary-btn.big { width: 100%; padding: 14px; margin-top: 12px; }
+.ghost-btn {
+  background: #fff; color: var(--ink); border: 1px solid var(--line);
+  padding: 8px 14px; border-radius: 999px;
+}
+.danger-btn {
+  background: #fff; color: var(--danger); border: 1px solid var(--danger);
+  padding: 8px 14px; border-radius: 999px;
+}
+
+/* ロック画面 */
+.lock-box { text-align: center; padding-top: 12vh; }
+.lock-icon { font-size: 3rem; }
+.lock-box form { max-width: 320px; margin: 18px auto 0; display: grid; gap: 10px; }
+.lock-box button {
+  background: var(--accent); color: #fff; border: none;
+  padding: 12px; border-radius: 999px; font-weight: 700;
+}
+.lock-note { color: #66708a; font-size: 0.85rem; }
+
+/* ヘッダー */
+.app-header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; margin-bottom: 12px;
+}
+.header-actions { display: flex; gap: 8px; }
+.counter { color: #66708a; font-size: 0.9rem; }
+
+/* 一覧 */
+.search-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.count { white-space: nowrap; color: #66708a; font-size: 0.9rem; }
+.card-list { display: grid; gap: 10px; }
+.card-item {
+  display: flex; gap: 12px; align-items: center; text-align: left;
+  background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px;
+  width: 100%;
+}
+.card-item img {
+  width: 64px; height: 64px; object-fit: cover; border-radius: 8px;
+  background: var(--accent-soft); flex: none;
+}
+.card-item .thumb-empty {
+  width: 64px; height: 64px; border-radius: 8px; background: var(--accent-soft);
+  display: flex; align-items: center; justify-content: center; font-size: 1.5rem; flex: none;
+}
+.card-item .name { font-weight: 700; font-size: 1.05rem; }
+.card-item .sub { color: #66708a; font-size: 0.85rem; margin-top: 2px; }
+.empty { color: #66708a; text-align: center; padding: 30px 0; }
+
+/* 詳細：フリップ */
+.flip-area { perspective: 1200px; margin-bottom: 6px; }
+.flip-inner {
+  position: relative; transition: transform 0.45s; transform-style: preserve-3d;
+  display: grid;
+}
+.flip-inner.flipped { transform: rotateY(180deg); }
+.flip-face {
+  backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  grid-area: 1 / 1;
+}
+.flip-back { transform: rotateY(180deg); }
+.photo-box {
+  background: #10182e; border-radius: 14px; min-height: 220px;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+  position: relative;
+}
+.photo-box img { width: 100%; display: block; }
+.photo-box img[src=""], .photo-box img:not([src]) { display: none; }
+.no-photo { color: #aebadd; position: absolute; }
+.photo-box img:not(.hidden) + .no-photo { display: none; }
+.flip-hint { text-align: center; color: #66708a; font-size: 0.8rem; margin: 8px 0 0; }
+
+/* 詳細：情報パネル */
+.info-panel {
+  background: #fff; border: 1px solid var(--line); border-radius: 14px;
+  padding: 14px; margin-top: 12px;
+}
+.info-panel h2 { font-size: 1.15rem; margin: 0 0 4px; }
+.info-panel .furigana { color: #66708a; font-size: 0.85rem; }
+.info-panel dl { margin: 10px 0 0; }
+.info-panel dt { color: #66708a; font-size: 0.8rem; margin-top: 10px; }
+.info-panel dd { margin: 2px 0 0; font-size: 1rem; word-break: break-all; }
+.action-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.action-row a {
+  text-decoration: none; padding: 9px 14px; border-radius: 999px;
+  border: 1px solid var(--accent); color: var(--accent); font-weight: 700; font-size: 0.9rem;
+}
+.action-row a.solid { background: var(--accent); color: #fff; }
+
+/* 活動記録 */
+.records { margin-top: 8px; display: grid; gap: 8px; }
+.record-item {
+  display: flex; gap: 10px; align-items: flex-start; text-align: left; width: 100%;
+  background: var(--accent-soft); border: 1px solid var(--line); border-radius: 10px; padding: 10px;
+}
+.record-item .r-main { flex: 1; min-width: 0; }
+.record-item .r-head { font-size: 0.85rem; color: #44507a; }
+.record-item .r-type {
+  display: inline-block; background: var(--accent); color: #fff; border-radius: 6px;
+  padding: 0 6px; font-size: 0.75rem; margin-right: 6px;
+}
+.record-item .r-content { margin-top: 3px; white-space: pre-wrap; word-break: break-word; }
+.confirm-check {
+  flex: none; width: 34px; height: 34px; border-radius: 50%;
+  border: 2px solid #2e7d32; color: #2e7d32; background: #fff; font-weight: 700;
+}
+.confirm-none { flex: none; color: #98a2bd; font-size: 0.78rem; padding-top: 8px; }
+.add-record-btn { margin-top: 10px; width: 100%; }
+
+/* フォーム */
+.card-form fieldset {
+  border: 1px solid var(--line); border-radius: 12px; background: #fff;
+  margin: 0 0 14px; padding: 10px 14px 14px;
+}
+.card-form legend { font-weight: 700; padding: 0 6px; }
+.zip-row { display: flex; gap: 8px; }
+.zip-row input { flex: 1; }
+.zip-row button {
+  flex: none; border: 1px solid var(--accent); color: var(--accent);
+  background: #fff; border-radius: 8px; padding: 0 14px; font-weight: 700;
+}
+.zip-status { color: #44507a; font-size: 0.85rem; min-height: 1.1em; margin: 4px 0 0; }
+.preview { width: 100%; border-radius: 10px; margin-top: 8px; }
+
+/* ダイアログ */
+dialog {
+  border: 1px solid var(--line); border-radius: 14px; padding: 18px;
+  width: min(92vw, 480px);
+}
+dialog::backdrop { background: rgba(16, 24, 46, 0.45); }
+dialog h2 { margin: 0 0 8px; font-size: 1.1rem; }
+.confirm-box { border: 1px dashed var(--line); border-radius: 10px; margin-top: 10px; }
+.check-row { display: flex; align-items: center; gap: 8px; }
+.check-row input { width: auto; }
+.dialog-buttons { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+.dialog-buttons .spacer { flex: 1; }
